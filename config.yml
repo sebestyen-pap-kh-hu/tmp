@@ -1,0 +1,106 @@
+recipe: default.v1
+language: hu
+pipeline:
+- name: "nlu_utils.nlu.extractors.extended_spacy.ExtendedSpacyNLP"
+  model: "hu_core_kate_trf"
+  case_sensitive: true
+  add_missing_commas: true
+- name: WhitespaceTokenizer
+  intent_split_symbol: +
+  intent_tokenization_flag: true
+- name: RegexFeaturizer
+  alias: "regex_featurizer"
+- name: LexicalSyntacticFeaturizer
+  alias: "lexical_syntactic_featurizer"
+- name: CountVectorsFeaturizer
+  analyzer: word
+  strip_accents: unicode
+  min_ngram: 1
+  max_ngram: 2
+  alias: "cv_word"
+- name: CountVectorsFeaturizer
+  analyzer: char_wb
+  min_df: 3
+  max_df: 2000
+  min_ngram: 2
+  max_ngram: 4
+  alias: "cv_char"
+  strip_accents: unicode
+- name: DIETClassifier
+  epochs: 15
+  batch_size: [64, 96]   # necessary to be able to build on Rasa >2.8.8
+  constrain_similarities: true
+  transformer_size: 256
+  embedding_dimension: 20
+  regularization_constant: 0.008
+  negative_margin_scale: 0.8
+  random_seed: 42
+- name: "nlu_utils.nlu.extractors.regex_extractor.EntityRegexExtractor"
+  config_file: "entity_regexes.yml"
+- name: "nlu_utils.nlu.extractors.date_extractor.EntityDateExtractor"
+  use_intent:
+    [
+      "repay",
+      "search_transaction",
+      "transfer_money",
+      "transfer_money_own_account",
+      "when_is",
+    ]
+- name: "nlu_utils.nlu.extractors.duration_extractor.DurationEntityExtractor"
+  use_intent: ["parking"]
+- name: "nlu_utils.nlu.extractors.comment_extractor.EntityCommentExtractor"
+- name: "nlu_utils.nlu.extractors.amount_extractor.EntityAmountExtractor"
+- name: "nlu_utils.nlu.extractors.zone_code_extractor.ZoneCodeEntityExtractor"
+  use_intent: ["parking"]
+  add_zero_prefix: true
+- name: "nlu_utils.nlu.extractors.plate_number_extractor.PlateNumberEntityExtractor"
+  use_intent: ["parking"]
+- name: "nlu_utils.nlu.extractors.name_entity_consolidator.NameEntityConsolidator"
+- name: "nlu_utils.nlu.extractors.address_extractor.EntityAddressExtractor"
+- name: "nlu_utils.nlu.extractors.entity_consolidator.EntityConsolidator"
+  keep: 
+    RegexEntityExtractor: ["car_hu_plate_number"]
+    ZoneCodeEntityExtractor: ["parking_zone_code"]
+    DIETClassifier: ["amount"]
+  similarity_threshold: 0.90
+  config_file: "entity_values.yml"
+- name: EntitySynonymMapper
+- name: "nlu_utils.nlu.extractors.intent_entity_cleaner.IntentEntityCleaner"
+  config_file: "entity_cleaner_data.json"
+- name: ResponseSelector
+  epochs: 23
+  retrieval_intent: smalltalk
+  constrain_similarities: true
+  random_seed: 42
+  featurizers: ["cv_word", "cv_char"]
+- name: ResponseSelector
+  epochs: 7
+  retrieval_intent: greet
+  constrain_similarities: true
+  random_seed: 42
+  featurizers: ["cv_word", "cv_char"]
+- name: ResponseSelector
+  epochs: 4
+  retrieval_intent: positive
+  constrain_similarities: true
+  random_seed: 42
+  featurizers: ["cv_word", "cv_char"]
+- name: FallbackClassifier
+  threshold: 0.7
+  ambiguity_threshold: 0.1
+policies:
+- name: RulePolicy
+  core_fallback_threshold: 0.5
+  core_fallback_action_name: action_intent_help_utter_revert
+  enable_fallback_prediction: true
+  check_for_contradictions: true
+- name: AugmentedMemoizationPolicy
+  max_history: 20
+- name: TEDPolicy
+  max_history: 20
+  epochs: 5
+  batch_size: 50
+  max_training_samples: 300
+  constrain_similarities: true
+  random_seed: 42
+assistant_id: 20240617-150006-uniform-span
